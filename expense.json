@@ -1,0 +1,668 @@
+{
+  "name": "expense",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        16,
+        -160
+      ],
+      "id": "56e25875-f018-4f75-826f-3215ef718dfc",
+      "name": "Email Trigger (IMAP)",
+      "credentials": {
+        "imap": {
+          "id": "x7etwmCiiZRTsMZf",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst extractedData = items\n  // Only consider messages that have debited or credited\n  .filter(item => {\n    const text = item?.json?.textPlain || \"\";\n    return /debited|credited/i.test(text);\n  })\n  .map((item) => {\n    const text = item.json.textPlain.replace(/[\\r\\n]+/g, \" \").trim();\n\n    // Extract amount\n    const amountMatch = text.match(/(debited|credited) by ([\\d,.]+)/i);\n    const amount = amountMatch ? parseFloat(amountMatch[2].replace(/,/g, \"\")) : null;\n\n    // Extract date after \"on date\"\n    const dateMatch = text.match(/on date (\\d{2}[A-Za-z]{3}\\d{2})/i);\n    let formattedDate = null;\n    if (dateMatch) {\n      const rawDate = dateMatch[1]; // e.g., 10Nov25\n      const day = rawDate.slice(0, 2);\n      const month = rawDate.slice(2, 5);\n      const year = \"20\" + rawDate.slice(5, 7);\n      formattedDate = `${day} ${month} ${year}`; // e.g., 10 Nov 2025\n    }\n\n    // Extract merchant name\n    const merchantMatch = text.match(/trf to ([A-Z\\s]+)/i);\n    let merchant = merchantMatch ? merchantMatch[1].trim() : \"Unknown\";\n    merchant = merchant.replace(/\\s+Refno.*$/i, \"\").trim();\n\n    return {\n      json: {\n        date: formattedDate,\n        amount,\n        name: merchant,\n      },\n    };\n  });\n\nreturn extractedData;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        -160
+      ],
+      "id": "aa621ce0-6abe-4f40-ab8b-21ddaf9d40ca",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Transactions"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Amount": "={{$(\"Code in JavaScript\").item.json[\"amount\"]}}",
+            "Merchant": "={{$(\"Code in JavaScript\").item.json[\"name\"]}}",
+            "Date": "={{$(\"Code in JavaScript\").item.json[\"date\"]}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Merchant",
+              "displayName": "Merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Amount",
+              "displayName": "Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        -160
+      ],
+      "id": "ef00bf47-955c-4763-9db5-a8d4154c4da3",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8QgNsPnttz9NIAbz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst totalAmounts = items.reduce((acc, item) => {\n  const name = item.json.Merchant;\n  const amount = item.json.Amount;\n  if (!acc[name]) {\n    acc[name] = { name, total: 0 };\n  }\n  acc[name].total += amount;\n  return acc;\n}, {});\n\nconst result = Object.values(totalAmounts).map((item) => ({ json: item }));\n\nreturn result;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -160
+      ],
+      "id": "cb77af50-bb45-43a8-a3d2-bcaef53fc20b",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit?gid=2026002041#gid=2026002041",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Balance sheet",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Merchant": "={{$(\"Code in JavaScript1\").item.json[\"name\"]}}",
+            "Total Amount": "={{$(\"Code in JavaScript1\").item.json[\"total\"]}}"
+          },
+          "matchingColumns": [
+            "Merchant"
+          ],
+          "schema": [
+            {
+              "id": "Merchant",
+              "displayName": "Merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Total Amount",
+              "displayName": "Total Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1136,
+        -160
+      ],
+      "id": "fb9ce745-a670-4de0-80aa-0951674b8f1f",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8QgNsPnttz9NIAbz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a personal expense analyzer.\n\nAnalyze the spending based on the merchant and total amount. \nCategorize whether the expense is normal, needs attention, or is overbudget.\n\nINPUT:\nMerchant: {{$json[\"Merchant\"]}}\nTotal Spent: {{$json[\"Total Amount\"]}}\n\nTASK:\nReturn a single clean JSON object in this exact format:\n{\n  \"Merchant\": \"<merchant name>\",\n  \"Total\": <total amount as number>,\n  \"Note\": \"<short financial tip under 15 words>\",\n  \"Category\": \"<spending level - Yeah, that's fine / Need concern / Its overbudget>\"\n}\n\nGuidelines for Category:\n- If Total < ₹500 → \"Yeah, that's fine\"\n- If ₹500 ≤ Total < ₹5000 → \"Need concern\"\n- If Total ≥ ₹5000 → \"Its overbudget\"\n- Exceptions:\n  - If Merchant includes terms like \"Jio\", \"Electricity\", \"Grocery\", or \"Bill\" → these are **necessities**, mark as \"Yeah, that's fine\" even if mid-range.\n  - If Merchant includes \"Zomato\", \"Swiggy\", \"Zepto\", \"Cafe\", or \"Shopping\" → more discretionary, lean toward \"Need concern\".\n  - If Merchant involves large transfers or personal names with high amounts → likely personal transfers, mark as \"Its overbudget\".\n\nRules:\n- Always output valid JSON only — no markdown, backticks, or extra text.\n- Keep suggestions short and practical (like \"Review monthly budget\" or \"Normal utility bill\").\n- Never skip any field.\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        -160
+      ],
+      "id": "90dc78fc-4c9a-44af-903d-9689e782433f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node — parse AI output that may include ```json fences\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let raw = item.json.output;\n\n  // If the field is already an object/array, pass it through\n  if (typeof raw !== 'string') {\n    if (Array.isArray(raw)) {\n      for (const el of raw) results.push({ json: el });\n    } else {\n      results.push({ json: raw });\n    }\n    continue;\n  }\n\n  // 1) Remove common fences like ```json and ```\n  raw = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();\n\n  // 2) Try to extract the first JSON object or array block { ... } or [ ... ]\n  const jsonMatch = raw.match(/(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])/);\n  const candidate = jsonMatch ? jsonMatch[0].trim() : raw.trim();\n\n  // 3) Attempt parse with fallback error capture\n  try {\n    const parsed = JSON.parse(candidate);\n\n    if (Array.isArray(parsed)) {\n      for (const el of parsed) results.push({ json: el });\n    } else {\n      results.push({ json: parsed });\n    }\n  } catch (err) {\n    // If JSON.parse fails, return the raw text as an error field for debugging\n    results.push({\n      json: {\n        error: 'Invalid JSON from AI',\n        raw: raw,\n        \n      }\n    });\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -160
+      ],
+      "id": "81a3bfed-1f33-4015-bd69-62aa497a0980",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit?gid=2026002041#gid=2026002041",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Balance sheet",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Merchant": "={{ $json.Merchant }}",
+            "Total Amount": "={{ $json.Total }}",
+            "Note": "={{ $json.Note }}",
+            "Category": "={{ $json.Category }}"
+          },
+          "matchingColumns": [
+            "Merchant"
+          ],
+          "schema": [
+            {
+              "id": "Merchant",
+              "displayName": "Merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Total Amount",
+              "displayName": "Total Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Note",
+              "displayName": "Note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1936,
+        -160
+      ],
+      "id": "ab708c61-668f-4cd9-b791-cdd1ba923f51",
+      "name": "Append or update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8QgNsPnttz9NIAbz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        688,
+        -160
+      ],
+      "id": "747e5d14-5bd2-4d19-9ab9-09ab4b458770",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8QgNsPnttz9NIAbz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        1432,
+        64
+      ],
+      "id": "0f5e1a9d-3197-4287-b993-943586caf69f",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "F25eClZPFZ4IbWhL",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expense-analysis assistant. I will provide you the expense data from my Google Sheet in JSON form:\n{{ $json.data }}\nFirst, follow this process step by step:\n\nSTEP 1 — Understand the Data\nAnalyze the expense records carefully.\nCheck for:\nMissing information\nUnclear merchants\nUnusual or suspicious amounts\nAmounts written in the wrong format\nLarge payments to individuals where the reason is not obvious\nYou can auto-understand common merchants like zomato, zepto etc\n\nSTEP 2 — If Anything Is Unclear, Ask Questions\nBefore generating any report:\nIf a transaction looks unusual\nIf the amount format is inconsistent\nIf you cannot understand why a payment was made (e.g., a large payment to a person)\nIf the category is missing or confusing\n\n👉 Ask me a clear and specific question to clarify the issue.\nAsk one question at a time until the dataset becomes fully understandable.\nDo NOT generate the report until you have clarity.\n\nSTEP 3 — When Everything Is Clear\nOnce you fully understand all transactions:\nAsk me:\n“Everything looks clear now. Should I generate the expense report?”\nWait for my response:\nIf I say Yes → Generate the final detailed report\nIf I say No → Ask what I want to do instead\n\nSTEP 4 — Final Report (Only After Approval)\nWhen I approve, generate a detailed expense report including:\nTotal number of transactions\nTotal spending amount\nHighest expense\nand tell me where i lagged in uneccesary expense this much , and here i can save this much amount\n\n\nIMPORTANT RULES\nPresent results in a clean table format\nAsk clarifying questions before generating the report.\nUse the same conversation thread.\nDo NOT assume unclear payments — always ask.\nAuto-infer reasons for common merchants.\n\nnote : If the user already answered your question, do NOT ask again.\nUse the stored conversation memory to continue.\nAsk question one by one not in one go , adn at first dont give summary first only ask questions\nIf i replies dont ask same question understand my reply and proceed for report genertion\n\n\n\nWe must:\n\n1. Extract the JSON inside ```json … ```\n2. Parse it\n3. Extract merchant + amount from the **table inside `final_answer`**  \n4. Return clean JSON items like:\n\n```json\n{ \"merchant\": \"NAMAN KUMAR PATE\", \"amount\": 12931 }\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        912,
+        272
+      ],
+      "id": "a20b7f7a-2f7b-43a0-b4f8-3c1f02db4ebf",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1048,
+        496
+      ],
+      "id": "6c93ff77-600c-4973-8cc0-43b0368d25a8",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        920,
+        496
+      ],
+      "id": "59f5e930-5a65-4b67-851e-43f45a6dd171",
+      "name": "Mistral Cloud Chat Model1",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "F25eClZPFZ4IbWhL",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        16,
+        272
+      ],
+      "id": "4df4feaf-93d6-4586-b87b-7cf82c031bed",
+      "name": "When chat message received",
+      "webhookId": "f65cab82-cc0c-4464-9615-8ddbf9bffdd6"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934",
+          "mode": "list",
+          "cachedResultName": "Expense Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2026002041,
+          "mode": "list",
+          "cachedResultName": "Balance sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YhjYqmLoG5Pbk3VWnxxD2fRPYq6A6JZQC8HG4ff934/edit#gid=2026002041"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        240,
+        344
+      ],
+      "id": "5a08d610-2412-4118-b88a-b6c39cf225f8",
+      "name": "Get row(s) in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8QgNsPnttz9NIAbz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      data: JSON.stringify(items.map(item => item.json), null, 2)\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        272
+      ],
+      "id": "d2a6c661-6384-49ab-847b-72d64b8d99df",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        464,
+        272
+      ],
+      "id": "1962941e-bb4b-4957-b397-ab7571b63a08",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet1": {
+      "main": [
+        []
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "c1319c40-f063-432c-bfcc-4304ab796002",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "952ce22d34877814ad86305ac1307589eaa87251197ea8d0762df6a73fe88c4a"
+  },
+  "id": "8rg1NhQdyajVSVG0",
+  "tags": []
+}
